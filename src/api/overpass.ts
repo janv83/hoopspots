@@ -74,6 +74,10 @@ export function courtFromElement(el: OverpassElement): Court | null {
     openingHours: tags.opening_hours ?? null,
     website: tags.website ?? tags['contact:website'] ?? null,
     address: buildAddress(tags),
+    image: tags.image?.startsWith('http') ? tags.image : null,
+    wikimediaCommons: tags.wikimedia_commons?.startsWith('File:')
+      ? tags.wikimedia_commons
+      : null,
   };
 }
 

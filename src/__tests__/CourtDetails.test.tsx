@@ -5,6 +5,16 @@ import { CourtDetails } from '../components/CourtDetails';
 import { I18nProvider } from '../i18n';
 import type { Court } from '../types';
 
+// No network in component tests: enrichment calls are mocked.
+vi.mock('../api/nominatim', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../api/nominatim')>()),
+  reverseArea: vi.fn().mockResolvedValue('Lehen, Salzburg, Österreich'),
+}));
+vi.mock('../api/commons', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../api/commons')>()),
+  findNearbyPhoto: vi.fn().mockResolvedValue(null),
+}));
+
 function Providers({ children }: { children: ReactNode }) {
   return <I18nProvider>{children}</I18nProvider>;
 }
@@ -23,15 +33,18 @@ const court: Court = {
   openingHours: null,
   website: null,
   address: null,
+  image: null,
+  wikimediaCommons: null,
 };
 
 describe('CourtDetails', () => {
-  it('shows name, translated facts and source link', () => {
+  it('shows name, translated facts and source link', async () => {
     render(<CourtDetails court={court} onClose={() => {}} />, { wrapper: Providers });
 
     expect(screen.getByText('Lehener Park Court')).toBeInTheDocument();
     expect(screen.getByText('Asphalt')).toBeInTheDocument();
     expect(screen.getByText('öffentlich')).toBeInTheDocument();
+    expect(await screen.findByText('Lehen, Salzburg, Österreich')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /OpenStreetMap/ })).toHaveAttribute(
       'href',
       'https://www.openstreetmap.org/node/123',

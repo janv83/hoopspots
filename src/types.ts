@@ -18,4 +18,8 @@ export interface Court {
   openingHours: string | null;
   website: string | null;
   address: string | null;
+  /** Direct photo URL from the OSM `image` tag. */
+  image: string | null;
+  /** OSM `wikimedia_commons` tag, e.g. "File:Court.jpg". */
+  wikimediaCommons: string | null;
 }

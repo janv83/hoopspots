@@ -34,7 +34,22 @@ describe('courtFromElement', () => {
       openingHours: 'sunrise-sunset',
       website: 'https://example.org',
       address: null,
+      image: null,
+      wikimediaCommons: null,
     });
+  });
+
+  it('keeps only usable photo tags', () => {
+    expect(courtFromElement(node({ image: 'https://x.org/a.jpg' }))?.image).toBe(
+      'https://x.org/a.jpg',
+    );
+    expect(courtFromElement(node({ image: 'a.jpg' }))?.image).toBeNull();
+    expect(
+      courtFromElement(node({ wikimedia_commons: 'File:Court.jpg' }))?.wikimediaCommons,
+    ).toBe('File:Court.jpg');
+    expect(
+      courtFromElement(node({ wikimedia_commons: 'Category:Basketball' }))?.wikimediaCommons,
+    ).toBeNull();
   });
 
   it('uses the centroid for ways and relations', () => {

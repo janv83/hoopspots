@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { useI18n } from '../i18n';
 import type { TranslationKey } from '../i18n';
 import type { Court } from '../types';
+import { commonsPageUrl, commonsThumbUrl, findNearbyPhoto } from '../api/commons';
+import type { CourtPhoto } from '../api/commons';
+import { reverseArea } from '../api/nominatim';
 import { IconClose, IconExternal, IconRoute, IconShare } from './Icons';
 
 const SURFACE_KEYS: Record<string, TranslationKey> = {
@@ -23,8 +26,10 @@ interface CourtDetailsProps {
 }
 
 export function CourtDetails({ court, onClose }: CourtDetailsProps) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [copied, setCopied] = useState(false);
+  const [area, setArea] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<CourtPhoto | null>(null);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -35,6 +40,31 @@ export function CourtDetails({ court, onClose }: CourtDetailsProps) {
   }, [onClose]);
 
   useEffect(() => setCopied(false), [court.id]);
+
+  // Enrich lazily on selection: surrounding area name + a photo.
+  useEffect(() => {
+    setArea(null);
+    setPhoto(null);
+    const controller = new AbortController();
+
+    reverseArea(court.lat, court.lon, lang, controller.signal).then(setArea, () => {});
+
+    if (court.image) {
+      setPhoto({ thumbUrl: court.image, pageUrl: null, nearby: false });
+    } else if (court.wikimediaCommons) {
+      setPhoto({
+        thumbUrl: commonsThumbUrl(court.wikimediaCommons, 640),
+        pageUrl: commonsPageUrl(court.wikimediaCommons),
+        nearby: false,
+      });
+    } else {
+      findNearbyPhoto(court.lat, court.lon, controller.signal).then(
+        (found) => found && setPhoto(found),
+        () => {},
+      );
+    }
+    return () => controller.abort();
+  }, [court, lang]);
 
   const share = async () => {
     try {
@@ -69,11 +99,35 @@ export function CourtDetails({ court, onClose }: CourtDetailsProps) {
   return (
     <aside className="details" aria-label={court.name ?? t('court.unnamed')}>
       <header className="details__head">
-        <h2 className="details__title">{court.name ?? t('court.unnamed')}</h2>
+        <div>
+          <h2 className="details__title">{court.name ?? t('court.unnamed')}</h2>
+          {area && <p className="details__area">{area}</p>}
+        </div>
         <button type="button" className="iconbtn" aria-label={t('details.close')} onClick={onClose}>
           <IconClose />
         </button>
       </header>
+
+      {photo && (
+        <figure className="details__photo">
+          <img
+            src={photo.thumbUrl}
+            alt={court.name ?? t('court.unnamed')}
+            loading="lazy"
+            onError={() => setPhoto(null)}
+          />
+          {(photo.nearby || photo.pageUrl) && (
+            <figcaption>
+              {photo.nearby && <>{t('details.photoNearby')}{photo.pageUrl ? ' · ' : ''}</>}
+              {photo.pageUrl && (
+                <a href={photo.pageUrl} target="_blank" rel="noreferrer">
+                  Wikimedia Commons
+                </a>
+              )}
+            </figcaption>
+          )}
+        </figure>
+      )}
 
       {rows.length > 0 && (
         <dl className="details__facts">

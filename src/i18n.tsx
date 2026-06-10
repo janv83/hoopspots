@@ -25,6 +25,7 @@ const de = {
   'list.countOne': '1 Court',
   'list.empty': 'Keine Courts in diesem Ausschnitt. Verschiebe die Karte oder suche einen Ort.',
   'list.more': '+ {count} weitere — zoome näher heran',
+  'list.world': '{count} Courts weltweit erfasst. Zoome hinein oder suche einen Ort, um Details zu laden.',
 
   'court.unnamed': 'Basketballplatz',
   'court.hoops': 'Körbe',
@@ -52,6 +53,7 @@ const de = {
   'surface.dirt': 'Erde',
 
   'details.directions': 'Route planen',
+  'details.photoNearby': 'Foto aus der Umgebung',
   'details.osm': 'Auf OpenStreetMap ansehen',
   'details.share': 'Link kopieren',
   'details.shared': 'Kopiert!',
@@ -89,6 +91,7 @@ const en: Record<TranslationKey, string> = {
   'list.countOne': '1 court',
   'list.empty': 'No courts in this area. Move the map or search for a place.',
   'list.more': '+ {count} more — zoom in',
+  'list.world': '{count} courts mapped worldwide. Zoom in or search for a place to load details.',
 
   'court.unnamed': 'Basketball court',
   'court.hoops': 'Hoops',
@@ -116,6 +119,7 @@ const en: Record<TranslationKey, string> = {
   'surface.dirt': 'Dirt',
 
   'details.directions': 'Get directions',
+  'details.photoNearby': 'Photo from the surrounding area',
   'details.osm': 'View on OpenStreetMap',
   'details.share': 'Copy link',
   'details.shared': 'Copied!',

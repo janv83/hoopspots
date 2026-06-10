@@ -8,6 +8,7 @@ import L from 'leaflet';
 import Supercluster from 'supercluster';
 import type { BBox, LatLon } from '../geo';
 import type { Court } from '../types';
+import type { OverviewSource } from '../overview/overviewClient';
 
 export interface Viewport {
   bbox: BBox;
@@ -87,6 +88,9 @@ interface MapViewProps {
   target: MapTarget | null;
   theme: 'light' | 'dark';
   initialView: { lat: number; lon: number; zoom: number };
+  /** Worldwide static dataset, shown below `liveMinZoom`. */
+  overview: OverviewSource | null;
+  liveMinZoom: number;
   onSelect: (id: string) => void;
   onDeselect: () => void;
   onViewportChange: (viewport: Viewport) => void;
@@ -98,6 +102,8 @@ export function MapView({
   target,
   theme,
   initialView,
+  overview,
+  liveMinZoom,
   onSelect,
   onDeselect,
   onViewportChange,
@@ -109,9 +115,14 @@ export function MapView({
   const indexRef = useRef<Supercluster<CourtProps>>(buildIndex([]));
   const courtsByIdRef = useRef<Map<string, Court>>(new Map());
   const selectedRef = useRef(selectedId);
+  const overviewRef = useRef(overview);
+  const overviewRequest = useRef(0);
+  const liveMinZoomRef = useRef(liveMinZoom);
   const onSelectRef = useRef(onSelect);
   const onDeselectRef = useRef(onDeselect);
   const onViewportChangeRef = useRef(onViewportChange);
+  overviewRef.current = overview;
+  liveMinZoomRef.current = liveMinZoom;
   onSelectRef.current = onSelect;
   onDeselectRef.current = onDeselect;
   onViewportChangeRef.current = onViewportChange;
@@ -121,6 +132,11 @@ export function MapView({
     const map = mapRef.current;
     const layer = markersRef.current;
     if (!map || !layer) return;
+
+    if (Math.round(map.getZoom()) < liveMinZoomRef.current) {
+      renderOverview(map, layer);
+      return;
+    }
 
     const bounds = map.getBounds();
     const features = indexRef.current.getClusters(
@@ -156,6 +172,53 @@ export function MapView({
           .addTo(layer);
       }
     }
+  };
+
+  // Async path for the worldwide dataset: ask the worker for clusters and
+  // drop the response if the user has moved on in the meantime.
+  const renderOverview = (map: L.Map, layer: L.LayerGroup) => {
+    const source = overviewRef.current;
+    if (!source) {
+      layer.clearLayers();
+      return;
+    }
+    const requestId = ++overviewRequest.current;
+    const bounds = map.getBounds();
+    const bbox = {
+      south: bounds.getSouth(),
+      west: bounds.getWest(),
+      north: bounds.getNorth(),
+      east: bounds.getEast(),
+    };
+    source.getClusters(bbox, Math.round(map.getZoom())).then((clusters) => {
+      if (requestId !== overviewRequest.current || !mapRef.current) return;
+      if (Math.round(mapRef.current.getZoom()) >= liveMinZoomRef.current) return;
+
+      layer.clearLayers();
+      for (const cluster of clusters) {
+        const { lat, lon, count, clusterId } = cluster;
+        if (clusterId !== null && count > 1) {
+          L.marker([lat, lon], {
+            icon: clusterIcon(count),
+            title: String(count),
+            bubblingMouseEvents: false,
+          })
+            .on('click', () => {
+              source.getExpansionZoom(clusterId).then((zoom) => {
+                mapRef.current?.flyTo([lat, lon], Math.min(zoom, MAX_ZOOM), { duration: 0.5 });
+              });
+            })
+            .addTo(layer);
+        } else {
+          // Single court in the static dataset: zooming in loads its details live.
+          L.marker([lat, lon], { icon: courtIcon(false), bubblingMouseEvents: false })
+            .on('click', () => {
+              mapRef.current?.flyTo([lat, lon], liveMinZoomRef.current, { duration: 0.6 });
+            })
+            .addTo(layer);
+        }
+      }
+    });
   };
 
   // Create the map once.
@@ -209,6 +272,12 @@ export function MapView({
     renderMarkers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
+
+  // First render of the world view once the overview dataset is ready.
+  useEffect(() => {
+    renderMarkers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overview]);
 
   useEffect(() => {
     if (target && mapRef.current) {

@@ -9,6 +9,8 @@ import type { ListedCourt } from './components/CourtList';
 import { CourtDetails } from './components/CourtDetails';
 import { IconBall, IconLocate, IconMoon, IconSun } from './components/Icons';
 import { useCourts, MIN_FETCH_ZOOM } from './hooks/useCourts';
+import { startOverview } from './overview/overviewClient';
+import type { OverviewSource } from './overview/overviewClient';
 import { fetchCourtById } from './api/overpass';
 import { bboxContainsPoint, haversineKm } from './geo';
 import type { Place } from './api/nominatim';
@@ -63,7 +65,23 @@ function Page() {
   const { courts, courtsById, status, retry } = useCourts(viewport);
   // Holds a deep-linked court until its area has been loaded normally.
   const [linkedCourt, setLinkedCourt] = useState<Court | null>(null);
+  // Worldwide static dataset, clustered in a web worker.
+  const [overview, setOverview] = useState<OverviewSource | null>(null);
+  const [worldTotal, setWorldTotal] = useState<number | null>(null);
   const seq = useRef(0);
+
+  useEffect(() => {
+    const source = startOverview(
+      (total) => {
+        setWorldTotal(total);
+        setOverview(source);
+      },
+      () => {
+        /* dataset unavailable — the app degrades to live-only loading */
+      },
+    );
+    return () => source.dispose();
+  }, []);
 
   const flyTo = useCallback((lat: number, lon: number, zoom: number) => {
     seq.current += 1;
@@ -132,8 +150,14 @@ function Page() {
     );
   };
 
-  const countLabel =
-    listed.length === 1 ? t('list.countOne') : t('list.count', { count: String(listed.length) });
+  const zoomedOut = (viewport?.zoom ?? MIN_FETCH_ZOOM) < MIN_FETCH_ZOOM;
+  const countLabel = zoomedOut
+    ? worldTotal !== null
+      ? t('list.count', { count: new Intl.NumberFormat(lang).format(worldTotal) })
+      : ''
+    : listed.length === 1
+      ? t('list.countOne')
+      : t('list.count', { count: String(listed.length) });
 
   return (
     <div className="app">
@@ -186,12 +210,20 @@ function Page() {
             <span className="sidebar__count">{countLabel}</span>
           </div>
           <div className="sidebar__scroll">
-            <CourtList
-              courts={listed.slice(0, LIST_LIMIT)}
-              hiddenCount={Math.max(0, listed.length - LIST_LIMIT)}
-              selectedId={selectedId}
-              onPick={pickCourt}
-            />
+            {zoomedOut ? (
+              <p className="list__empty">
+                {worldTotal !== null
+                  ? t('list.world', { count: new Intl.NumberFormat(lang).format(worldTotal) })
+                  : t('status.zoomedOut')}
+              </p>
+            ) : (
+              <CourtList
+                courts={listed.slice(0, LIST_LIMIT)}
+                hiddenCount={Math.max(0, listed.length - LIST_LIMIT)}
+                selectedId={selectedId}
+                onPick={pickCourt}
+              />
+            )}
           </div>
           <footer className="sidebar__footer">
             <span>{t('footer.data')}</span>
@@ -211,6 +243,8 @@ function Page() {
             target={target}
             theme={theme}
             initialView={initial.view}
+            overview={overview}
+            liveMinZoom={MIN_FETCH_ZOOM}
             onSelect={setSelectedId}
             onDeselect={() => setSelectedId(null)}
             onViewportChange={setViewport}
@@ -220,7 +254,7 @@ function Page() {
               <span className="spinner" aria-hidden="true" /> {t('status.loading')}
             </p>
           )}
-          {status === 'zoomedOut' && (viewport?.zoom ?? MIN_FETCH_ZOOM) < MIN_FETCH_ZOOM && (
+          {status === 'zoomedOut' && zoomedOut && overview === null && (
             <p className="mapstatus" role="status">
               {t('status.zoomedOut')}
             </p>
