@@ -47,6 +47,9 @@ async function queryBox({ south, west, north, east }) {
   });
   if (!response.ok) throw new Error(`HTTP ${response.status} from ${endpoint}`);
   const data = await response.json();
+  // Overpass reports server-side timeouts as HTTP 200 with a "remark" and a
+  // truncated (often empty) element list — that is a failure, not a result.
+  if (data.remark) throw new Error(`Overpass remark: ${String(data.remark).slice(0, 120)}`);
   if (!Array.isArray(data.elements)) throw new Error('No elements array in response');
   return data.elements;
 }
